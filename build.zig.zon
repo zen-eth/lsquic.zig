@@ -1,0 +1,21 @@
+.{
+    .name = .lsquic_zig,
+
+    .version = "0.0.0",
+
+    .fingerprint = 0x635d987270c47243, // Changing this has security and trust implications.
+
+    .minimum_zig_version = "0.14.0",
+
+    .dependencies = .{
+        .lsquic = .{
+            .url = "git+https://github.com/zen-eth/lsquic.git#f5ac29704b88b121874f91be8e9136de8c0f16a9",
+            .hash = "lsquic-0.0.0-jO7gdhAXAAAcMreeC2FoU9XUSvzKsnoZeJIryvnTfk62",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
