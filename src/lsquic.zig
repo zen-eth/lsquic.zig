@@ -1,11 +1,21 @@
 // Re-export the C types for convenience
-pub const lsquic_conn_t = c.lsquic_conn_t;
+// pub const Conn = c.lsquic_conn_t;
 pub const ConnectionContext = c.lsquic_conn_ctx_t;
-pub const lsquic_stream_t = c.lsquic_stream_t;
-pub const lsquic_cid_t = c.lsquic_cid_t;
-pub const out_spec = c.lsquic_out_spec;
-pub const struct_sockaddr = c.struct_sockaddr;
-pub const iovec = c.struct_iovec;
+// pub const StreamRaw = c.lsquic_stream_t;
+// pub const StreamContext = c.lsquic_stream_ctx_t;
+pub const OutSpec = c.lsquic_out_spec;
+pub const SockAddr = c.struct_sockaddr;
+pub const IoVec = c.struct_iovec;
+
+pub const LsquicVersion = enum(u8) {
+    V043 = c.LSQVER_043,
+    V046 = c.LSQVER_046,
+    V050 = c.LSQVER_050,
+    V_ID27 = c.LSQVER_ID27,
+    V_ID29 = c.LSQVER_ID29,
+    V_ID34 = c.LSQVER_ID34,
+    V_I001 = c.LSQVER_I001,
+};
 
 pub const GlobalInitFlags = struct {
     pub const CLIENT = c.LSQUIC_GLOBAL_CLIENT;
@@ -30,42 +40,13 @@ pub fn globalCleanup() void {
     c.lsquic_global_cleanup();
 }
 
-pub const OnNewConnFn = ?*const fn (?*anyopaque, ?*lsquic_conn_t) callconv(.c) ?*ConnectionContext;
-pub const OnGoawayReceivedFn = ?*const fn (?*lsquic_conn_t) callconv(.c) void;
-pub const OnConnClosedFn = ?*const fn (?*lsquic_conn_t) callconv(.c) void;
-pub const OnNewStreamFn = ?*const fn (?*anyopaque, ?*lsquic_stream_t) callconv(.c) ?*c.lsquic_stream_ctx_t;
-pub const OnReadFn = ?*const fn (?*lsquic_stream_t, ?*c.lsquic_stream_ctx_t) callconv(.c) void;
-pub const OnWriteFn = ?*const fn (?*lsquic_stream_t, ?*c.lsquic_stream_ctx_t) callconv(.c) void;
-pub const OnCloseFn = ?*const fn (?*lsquic_stream_t, ?*c.lsquic_stream_ctx_t) callconv(.c) void;
-pub const OnDgWriteFn = ?*const fn (?*lsquic_conn_t, ?*anyopaque, usize) callconv(.c) isize;
-pub const OnDatagramFn = ?*const fn (?*lsquic_conn_t, ?*const anyopaque, usize) callconv(.c) void;
-pub const OnHskDoneFn = ?*const fn (?*lsquic_conn_t, c.lsquic_hsk_status) callconv(.c) void;
-pub const OnNewTokenFn = ?*const fn (?*lsquic_conn_t, [*c]const u8, usize) callconv(.c) void;
-pub const OnSessResumeInfoFn = ?*const fn (?*lsquic_conn_t, [*c]const u8, usize) callconv(.c) void;
-pub const OnResetFn = ?*const fn (?*lsquic_stream_t, ?*c.lsquic_stream_ctx_t, c_int) callconv(.c) void;
-pub const OnConnCloseFrameReceivedFn = ?*const fn (?*lsquic_conn_t, c_int, u64, [*c]const u8, c_int) callconv(.c) void;
+/// Microseconds since some time. Equivalent to `lsquic_time_t`.
+pub const Time = u64;
 
-/// Connection wrapper
-pub const Connection = opaque {
-    pub fn getId(self: *const Connection) *const lsquic_cid_t {
-        const conn_ptr: *const c.lsquic_conn_t = @ptrCast(self);
-        return c.lsquic_conn_id(conn_ptr);
-    }
-
-    pub fn getEngine(self: *Connection) *Engine {
-        const conn_ptr: *c.lsquic_conn_t = @ptrCast(self);
-        return @ptrCast(c.lsquic_conn_get_engine(conn_ptr));
-    }
-};
-
-/// Stream wrapper
-pub const Stream = opaque {
-    /// Get the connection this stream belongs to
-    pub fn getConnection(self: *const Stream) *Connection {
-        const stream_ptr: *const c.lsquic_stream_t = @ptrCast(self);
-        return @ptrCast(c.lsquic_stream_conn(stream_ptr));
-    }
-};
+// Opaque types (will need proper definitions elsewhere)
+pub const HashElement = extern struct { data: [32]u8 };
+pub const Hash = opaque {};
+pub const DataIn = opaque {};
 
 test "lsquic global init and cleanup" {
     // Initialize for both client and server
@@ -79,11 +60,59 @@ test "lsquic global init and cleanup" {
     globalCleanup();
 }
 
+fn newStream() Stream {}
+
+//* Write data to the stream, but do not flush: connection cap take a hit.
+// * After stream is destroyed, connection cap should go back up.
+// */
+//static void
+//test_reset_stream_with_unflushed_data (struct test_objs *tobjs)
+//{
+//    lsquic_stream_t *stream;
+//    char buf[0x100];
+//    size_t n;
+//    const struct lsquic_conn_cap *const cap = &tobjs->conn_pub.conn_cap;
+//
+//    assert(0x4000 == lsquic_conn_cap_avail(cap));   /* Self-check */
+//    stream = new_stream(tobjs, 345);
+//    n = lsquic_stream_write(stream, buf, 100);
+//    assert(n == 100);
+//
+//    /* Unflushed data counts towards connection cap for connection-limited
+//     * stream:
+//     */
+//    assert(0x4000 - 100 == lsquic_conn_cap_avail(cap));
+//
+//    lsquic_stream_destroy(stream);
+//    assert(0x4000 == lsquic_conn_cap_avail(cap));   /* Goes back up */
+//}
+
+test "stream" {
+    // var stream = Stream{};
+
+    var stream = Stream;
+    const allocator = std.testing.allocator;
+    const buf = try std.ArrayList(u8).initCapacity(allocator, 100);
+    _ = c.lsquic_stream_write(&stream, @ptrCast(buf), 100);
+    stream.write(buf.items, 100);
+}
+
 const std = @import("std");
 const testing = std.testing;
 
 const Engine = engine.Engine;
 pub const engine = @import("engine.zig");
+
+// Stream imports
+pub const Stream = @import("stream.zig").Stream;
+pub const HskStatus = @import("stream.zig").HskStatus;
+pub const StreamContext = @import("stream.zig").StreamContext;
+pub const StreamIf = @import("stream.zig").StreamIf;
+pub const StreamId = @import("stream.zig").StreamId;
+pub const StreamRaw = @import("stream.zig").StreamRaw;
+
+//TODO: move to conn.zig
+pub const Conn = @import("stream.zig").Conn;
 
 const c = @cImport({
     @cInclude("lsquic.h");

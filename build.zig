@@ -42,19 +42,32 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
 
-    const tutorial = b.addExecutable(.{
-        .name = "tutorial",
-        .root_source_file = b.path("src/main.zig"),
+    const duck_client = b.addExecutable(.{
+        .name = "duck_client",
+        .root_source_file = b.path("src/duck_client.zig"),
         .optimize = optimize,
         .target = target,
     });
-    tutorial.root_module.addImport("lsquic", mod_lsquic);
-    b.installArtifact(tutorial);
-    const run_cmd = b.addRunArtifact(tutorial);
-    run_cmd.step.dependOn(b.getInstallStep());
+    const duck_server = b.addExecutable(.{
+        .name = "duck_server",
+        .root_source_file = b.path("src/duck_server.zig"),
+        .optimize = optimize,
+        .target = target,
+    });
 
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
+    duck_client.root_module.addImport("lsquic", mod_lsquic);
+    duck_server.root_module.addImport("lsquic", mod_lsquic);
+    b.installArtifact(duck_client);
+    b.installArtifact(duck_server);
+    const run_duck_client_cmd = b.addRunArtifact(duck_client);
+    const run_duck_server_cmd = b.addRunArtifact(duck_server);
+    run_duck_client_cmd.step.dependOn(b.getInstallStep());
+    run_duck_server_cmd.step.dependOn(b.getInstallStep());
+
+    const run_duck_client_step = b.step("run-client", "Run duck client");
+    const run_duck_server_step = b.step("run-server", "Run duck server");
+    run_duck_client_step.dependOn(&run_duck_client_cmd.step);
+    run_duck_server_step.dependOn(&run_duck_server_cmd.step);
 }
 
 const std = @import("std");
