@@ -1,4 +1,4 @@
-const EngineError = error{CreationFailed};
+const EngineError = error{ CreationFailed, InvalidSettings };
 
 pub const EngineFlags = struct {
     pub const SERVER = c.LSENG_SERVER;
@@ -137,12 +137,12 @@ pub const EngineApi = struct {
     settings: ?*const c.lsquic_engine_settings,
 
     /// Function to look up certificate to use. Necessary in server-mode.
-    lookupCert: LookupCertFn,
+    lookupCert: ?LookupCertFn,
     certLuCtx: ?*anyopaque,
 
     // SSL context callback
     /// Function to fetch SSL context. Optional in client-mode.
-    getSslCtx: GetSslCtxFn,
+    getSslCtx: ?GetSslCtxFn,
 
     // Other optional callbacks
     hsiIf: ?*const c.lsquic_hset_if,
@@ -156,6 +156,8 @@ pub const EngineApi = struct {
     pub fn init(
         packets_out: PacketsOutFn,
         stream_if: StreamIf,
+        lookup_cert: ?LookupCertFn,
+        get_ssl_ctx: ?GetSslCtxFn,
     ) EngineApi {
         return .{
             .packetsOut = packets_out,
@@ -163,9 +165,9 @@ pub const EngineApi = struct {
             .streamIf = stream_if,
             .streamIfCtx = null,
             .settings = null,
-            .lookupCert = null,
+            .lookupCert = lookup_cert,
             .certLuCtx = null,
-            .getSslCtx = null,
+            .getSslCtx = get_ssl_ctx,
             .hsiIf = null,
             .hsiCtx = null,
             .alpn = null,
@@ -177,15 +179,19 @@ pub const EngineApi = struct {
 pub const Engine = extern struct {
     pub fn new(flags: c_uint, api: *const EngineApi) EngineError!*Engine {
         // Convert our Zig EngineApi to C's lsquic_engine_api
+        if (flags == EngineFlags.SERVER) {
+            if (api.lookupCert == null) return EngineError.InvalidSettings;
+            if (api.getSslCtx == null) return EngineError.InvalidSettings;
+        }
         var c_api: c.lsquic_engine_api = .{
             .ea_packets_out = api.packetsOut,
             .ea_packets_out_ctx = api.packetsOutCtx,
             .ea_stream_if = @ptrCast(&api.streamIf),
             .ea_stream_if_ctx = api.streamIfCtx,
             .ea_settings = api.settings,
-            .ea_lookup_cert = api.lookupCert,
+            .ea_lookup_cert = api.lookupCert.?,
             .ea_cert_lu_ctx = api.certLuCtx,
-            .ea_get_ssl_ctx = api.getSslCtx,
+            .ea_get_ssl_ctx = if (api.getSslCtx) |gsc| gsc else null,
             .ea_hsi_if = api.hsiIf,
             .ea_hsi_ctx = api.hsiCtx,
             .ea_alpn = api.alpn,
@@ -218,7 +224,7 @@ pub const Engine = extern struct {
 
     /// Returns true if there are connections to be processed, false otherwise.
     pub fn earliestAdvTick(self: *Engine, diff: [*c]c_int) bool {
-        return c.lsquic_engine_earliest_adv_tick(@ptrCast(self), diff);
+        return c.lsquic_engine_earliest_adv_tick(@ptrCast(self), diff) != 0;
     }
 
     /// Closes all mini connections and marks all full connections as going away.
@@ -236,8 +242,8 @@ pub const Engine = extern struct {
     }
 
     /// Returns true if engine has some unsent packets.
-    pub fn hasUnsentPackets(self: *Engine) void {
-        c.lsquic_engine_has_unsent_packets(@ptrCast(self));
+    pub fn hasUnsentPackets(self: *Engine) bool {
+        return c.lsquic_engine_has_unsent_packets(@ptrCast(self)) != 0;
     }
 
     /// Send out as many unsent packets as possible, until we are out of unsent packets or until ea_packets_out() fails.
@@ -251,6 +257,13 @@ pub const Engine = extern struct {
         c.lsquic_engine_destroy(engine_ptr);
     }
 };
+
+test "Engine creation fails with invalid settings" {
+    const packetsOut: PacketsOutFn = undefined;
+    const stream_if: StreamIf = .{};
+    const api = EngineApi.init(packetsOut, stream_if, null, null);
+    try std.testing.expectError(EngineError.InvalidSettings, Engine.new(EngineFlags.SERVER, &api));
+}
 
 const std = @import("std");
 const testing = std.testing;

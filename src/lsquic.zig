@@ -13,8 +13,8 @@ pub const LsquicVersion = enum(u8) {
     V050 = c.LSQVER_050,
     V_ID27 = c.LSQVER_ID27,
     V_ID29 = c.LSQVER_ID29,
-    V_ID34 = c.LSQVER_ID34,
     V_I001 = c.LSQVER_I001,
+    V_I002 = c.LSQVER_I002,
 };
 
 pub const GlobalInitFlags = struct {
@@ -87,16 +87,6 @@ fn newStream() Stream {}
 //    assert(0x4000 == lsquic_conn_cap_avail(cap));   /* Goes back up */
 //}
 
-test "stream" {
-    // var stream = Stream{};
-
-    var stream = Stream;
-    const allocator = std.testing.allocator;
-    const buf = try std.ArrayList(u8).initCapacity(allocator, 100);
-    _ = c.lsquic_stream_write(&stream, @ptrCast(buf), 100);
-    stream.write(buf.items, 100);
-}
-
 const std = @import("std");
 const testing = std.testing;
 
@@ -113,6 +103,10 @@ pub const StreamRaw = @import("stream.zig").StreamRaw;
 
 //TODO: move to conn.zig
 pub const Conn = @import("stream.zig").Conn;
+
+test {
+    testing.refAllDeclsRecursive(@This());
+}
 
 const c = @cImport({
     @cInclude("lsquic.h");

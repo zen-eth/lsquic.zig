@@ -224,10 +224,6 @@ pub const Stream = extern struct {
     sm_hist_idx: if (LSQUIC_KEEP_STREAM_HISTORY) HistIdx else void,
     sm_hist_buf: if (LSQUIC_KEEP_STREAM_HISTORY) [1 << SM_HIST_BITS]u8 else void,
 
-    pub fn new() Stream {
-        c.lsquic_stream_new();
-    }
-
     /// Get the connection this stream belongs to
     pub fn getConnection(self: *const Stream) *Conn {
         const stream_ptr: *const c.lsquic_stream_t = @ptrCast(self);

@@ -55,8 +55,14 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
+    const xev = b.dependency("libxev", .{ .target = target, .optimize = optimize });
+    const mod_xev = xev.module("xev");
+
     duck_client.root_module.addImport("lsquic", mod_lsquic);
+    duck_client.root_module.addImport("xev", mod_xev);
+
     duck_server.root_module.addImport("lsquic", mod_lsquic);
+    duck_server.root_module.addImport("xev", mod_xev);
     b.installArtifact(duck_client);
     b.installArtifact(duck_server);
     const run_duck_client_cmd = b.addRunArtifact(duck_client);
