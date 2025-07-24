@@ -1,31 +1,3 @@
-/// Connection wrapper
-pub const Conn = extern struct {
-    pub fn getId(self: *const Conn) *const Cid {
-        const conn_ptr: *const c.lsquic_conn_t = @ptrCast(self);
-        return c.lsquic_conn_id(conn_ptr);
-    }
-
-    pub fn getEngine(self: *Conn) *Engine {
-        const conn_ptr: *c.lsquic_conn_t = @ptrCast(self);
-        return @ptrCast(c.lsquic_conn_get_engine(conn_ptr));
-    }
-
-    pub fn getContext(self: *Conn) void {
-        _ = self;
-    }
-
-    pub fn makeStream(self: *Conn) void {
-        c.lsquic_conn_make_stream(@ptrCast(self));
-    }
-
-    pub fn wantDatagramWrite(self: *Conn, is_want: c_int) c_int {
-        return c.lsquic_conn_want_datagram_write(@ptrCast(self), is_want);
-    }
-    pub fn close(self: *Conn) void {
-        return c.lsquic_conn_close(@ptrCast(self));
-    }
-};
-
 // Enum for send headers state
 pub const SendHeadersState = enum(u8) {
     SSHS_BEGIN = 0,
@@ -33,7 +5,7 @@ pub const SendHeadersState = enum(u8) {
     SSHS_HBLOCK_SENDING = 2,
 };
 
-pub const ConnCap = extern struct {
+pub const ConnectionCap = extern struct {
     cc_max: u64,
     cc_sent: u64,
     cc_tosend: u64,
@@ -75,25 +47,25 @@ pub const HeadersStream = opaque {};
 pub const QpackEncHdl = opaque {};
 pub const QpackDecHdl = opaque {};
 pub const HcsoWriter = opaque {};
-pub const ConnStats = opaque {};
+pub const ConnectionStats = opaque {};
 
-pub const ConnPublicFlags = enum(c_uint) {
+pub const ConnectionPublicFlags = enum(c_uint) {
     CP_STREAM_UNBLOCKED = 1 << 0,
     _,
 };
 
-pub const ConnPublic = extern struct {
+pub const ConnectionPublic = extern struct {
     sending_streams: StreamsTailq,
     read_streams: StreamsTailq,
     write_streams: StreamsTailq,
     service_streams: StreamsTailq,
     all_streams: ?*Hash,
     cfcw: Cfcw,
-    conn_cap: ConnCap,
+    conn_cap: ConnectionCap,
     rtt_stats: RttStats,
     enpub: ?*EnginePublic,
     packet_out_malo: ?*Malo,
-    lconn: ?*Conn,
+    lconn: ?*Connection,
     mm: ?*Mm,
     u: extern union {
         gquic: extern struct {
@@ -106,9 +78,9 @@ pub const ConnPublic = extern struct {
             promises: ?*Hash,
         },
     },
-    cp_flags: ConnPublicFlags,
+    cp_flags: ConnectionPublicFlags,
     send_ctl: ?*SendCtl,
-    conn_stats: if (LSQUIC_CONN_STATS) ?*ConnStats else void,
+    conn_stats: if (LSQUIC_CONN_STATS) ?*ConnectionStats else void,
     path: ?*NetworkPath,
     stream_frame_bytes: if (LSQUIC_EXTRA_CHECKS) c_ulong else void,
     wtp_level: if (LSQUIC_EXTRA_CHECKS) c_uint else void,
@@ -132,7 +104,7 @@ pub const StreamFlowControlWindow = extern struct {
     sf_recv_off: u64,
     sf_read_off: u64,
     sf_last_updated: Time,
-    sf_conn_pub: [*c]ConnPublic,
+    sf_conn_pub: [*c]ConnectionPublic,
     sf_max_recv_win: usize,
     sf_stream_id: StreamId,
 };
@@ -148,7 +120,7 @@ pub const Stream = extern struct {
 
     stream_if: ?*const StreamIf,
     st_ctx: ?*StreamContext,
-    conn_pub: ?*ConnPublic,
+    conn_pub: ?*ConnectionPublic,
 
     // TAILQ entries for various linked lists
     next_send_stream: TailqEntry,
@@ -225,7 +197,7 @@ pub const Stream = extern struct {
     sm_hist_buf: if (LSQUIC_KEEP_STREAM_HISTORY) [1 << SM_HIST_BITS]u8 else void,
 
     /// Get the connection this stream belongs to
-    pub fn getConnection(self: *const Stream) *Conn {
+    pub fn getConnectionection(self: *const Stream) *Connection {
         const stream_ptr: *const c.lsquic_stream_t = @ptrCast(self);
         return @ptrCast(c.lsquic_stream_conn(stream_ptr));
     }
@@ -241,20 +213,20 @@ pub const Stream = extern struct {
 
 pub const StreamRaw = Stream;
 
-pub const OnNewConnFn = ?*const fn (?*anyopaque, ?*Conn) callconv(.c) ?*ConnectionContext;
-pub const OnGoawayReceivedFn = ?*const fn (?*Conn) callconv(.c) void;
-pub const OnConnClosedFn = ?*const fn (?*Conn) callconv(.c) void;
+pub const OnNewConnectionFn = ?*const fn (?*anyopaque, ?*Connection) callconv(.c) ?*ConnectionectionContext;
+pub const OnGoawayReceivedFn = ?*const fn (?*Connection) callconv(.c) void;
+pub const OnConnectionClosedFn = ?*const fn (?*Connection) callconv(.c) void;
 pub const OnNewStreamFn = ?*const fn (?*anyopaque, ?*StreamRaw) callconv(.c) ?*StreamContext;
 pub const OnReadFn = ?*const fn (?*StreamRaw, ?*StreamContext) callconv(.c) void;
 pub const OnWriteFn = ?*const fn (?*StreamRaw, ?*StreamContext) callconv(.c) void;
 pub const OnCloseFn = ?*const fn (?*StreamRaw, ?*StreamContext) callconv(.c) void;
-pub const OnDgWriteFn = ?*const fn (?*Conn, *const anyopaque, usize) callconv(.c) isize;
-pub const OnDatagramFn = ?*const fn (?*Conn, *const anyopaque, usize) callconv(.c) void;
-pub const OnHskDoneFn = ?*const fn (?*Conn, HskStatus) callconv(.c) void;
-pub const OnNewTokenFn = ?*const fn (?*Conn, [*c]const u8, usize) callconv(.c) void;
-pub const OnSessResumeInfoFn = ?*const fn (?*Conn, [*c]const u8, usize) callconv(.c) void;
+pub const OnDgWriteFn = ?*const fn (?*Connection, *const anyopaque, usize) callconv(.c) isize;
+pub const OnDatagramFn = ?*const fn (?*Connection, *const anyopaque, usize) callconv(.c) void;
+pub const OnHskDoneFn = ?*const fn (?*Connection, HskStatus) callconv(.c) void;
+pub const OnNewTokenFn = ?*const fn (?*Connection, [*c]const u8, usize) callconv(.c) void;
+pub const OnSessResumeInfoFn = ?*const fn (?*Connection, [*c]const u8, usize) callconv(.c) void;
 pub const OnResetFn = ?*const fn (?*StreamRaw, ?*StreamContext, c_int) callconv(.c) void;
-pub const OnConnCloseFrameReceivedFn = ?*const fn (?*Conn, c_int, u64, [*c]const u8, c_int) callconv(.c) void;
+pub const OnConnectionCloseFrameReceivedFn = ?*const fn (?*Connection, c_int, u64, [*c]const u8, c_int) callconv(.c) void;
 
 /// Zig translation of struct lsquic_stream_if
 /// The definitions of callback functions called by lsquic_stream to process events.
@@ -262,14 +234,14 @@ pub const StreamIf = extern struct {
     /// Called when a new connection is established.
     /// Use lsquic_conn_get_ctx to get back the context.
     /// It is OK for this function to return null.
-    on_new_conn: OnNewConnFn = null,
+    on_new_conn: OnNewConnectionFn = null,
 
     /// Called when our side received GOAWAY frame. After this,
     /// new streams should not be created. This callback is optional.
     on_goaway_received: OnGoawayReceivedFn = null,
 
     /// Called when a connection is closed.
-    on_conn_closed: OnConnClosedFn = null,
+    on_conn_closed: OnConnectionClosedFn = null,
 
     /// Called when a new stream is created.
     /// If you need to initiate a connection, call lsquic_conn_make_stream().
@@ -321,7 +293,7 @@ pub const StreamIf = extern struct {
     /// This allows the application to log low-level diagnostic information about
     /// errors received with the CONNECTION_CLOSE frame. If app_error is -1 then
     /// it is considered unknown if this is an app_error or not.
-    on_conncloseframe_received: OnConnCloseFrameReceivedFn = null,
+    on_conncloseframe_received: OnConnectionCloseFrameReceivedFn = null,
 };
 
 fn newTestStream() Stream {}
@@ -371,12 +343,14 @@ pub const SendCtl = opaque {};
 pub const Hash = opaque {};
 const Engine = @import("engine.zig").Engine;
 pub const HskStatus = c.lsquic_hsk_status;
-pub const Cid = c.lsquic_cid_t;
 pub const StreamId = u64;
 
-pub const ConnectionContext = c.lsquic_conn_ctx_t;
+pub const ConnectionectionContext = c.lsquic_conn_ctx_t;
 
 pub const StreamContext = struct {};
+
+const Connection = @import("connection.zig").Connection;
+
 const c = @cImport({
     @cInclude("lsquic.h");
     @cInclude("lsquic_types.h");

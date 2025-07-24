@@ -92,6 +92,7 @@ const testing = std.testing;
 
 const Engine = engine.Engine;
 pub const engine = @import("engine.zig");
+pub const connection = @import("connection.zig");
 
 // Stream imports
 pub const Stream = @import("stream.zig").Stream;
@@ -100,9 +101,6 @@ pub const StreamContext = @import("stream.zig").StreamContext;
 pub const StreamIf = @import("stream.zig").StreamIf;
 pub const StreamId = @import("stream.zig").StreamId;
 pub const StreamRaw = @import("stream.zig").StreamRaw;
-
-//TODO: move to conn.zig
-pub const Conn = @import("stream.zig").Conn;
 
 test {
     testing.refAllDeclsRecursive(@This());
