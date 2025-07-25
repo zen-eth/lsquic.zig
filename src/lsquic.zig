@@ -6,6 +6,7 @@ pub const ConnectionContext = c.lsquic_conn_ctx_t;
 pub const OutSpec = c.lsquic_out_spec;
 pub const SockAddr = c.struct_sockaddr;
 pub const IoVec = c.struct_iovec;
+pub const SslCtxSt = c.struct_ssl_ctx_st;
 
 pub const LsquicVersion = enum(u8) {
     V043 = c.LSQVER_043,
@@ -15,6 +16,8 @@ pub const LsquicVersion = enum(u8) {
     V_ID29 = c.LSQVER_ID29,
     V_I001 = c.LSQVER_I001,
     V_I002 = c.LSQVER_I002,
+    /// Special value indicating the number of versions in the enum. It may be used as argument to `engine.connect()`.
+    N_LSQVER = c.N_LSQVER,
 };
 
 pub const GlobalInitFlags = struct {
@@ -93,6 +96,8 @@ const testing = std.testing;
 const Engine = engine.Engine;
 pub const engine = @import("engine.zig");
 pub const connection = @import("connection.zig");
+
+pub const SslCtx = c.struct_ssl_ctx_st;
 
 // Stream imports
 pub const Stream = @import("stream.zig").Stream;

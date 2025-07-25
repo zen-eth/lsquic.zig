@@ -2,7 +2,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const liblsquic_dep = b.dependency("lsquic", .{
+    const upstream = b.dependency("lsquic", .{
         .target = target,
         .optimize = optimize,
     });
@@ -13,18 +13,18 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
-    const lib = b.addLibrary(.{
+    const lsquic = b.addLibrary(.{
         .name = "lsquic",
         .linkage = .static,
         .root_module = mod_lsquic,
     });
 
-    const liblsquic = liblsquic_dep.artifact("lsquic");
+    const liblsquic = upstream.artifact("lsquic");
 
-    lib.linkSystemLibrary("zlib");
-    lib.linkLibrary(liblsquic);
-    lib.step.dependOn(&liblsquic.step);
-    lib.addIncludePath(liblsquic_dep.path("include"));
+    lsquic.linkSystemLibrary("zlib");
+    lsquic.linkLibrary(liblsquic);
+    lsquic.step.dependOn(&liblsquic.step);
+    lsquic.addIncludePath(upstream.path("include"));
 
     const filters = b.option([]const []const u8, "filter", "filter based on name");
     const lib_unit_tests = b.addTest(.{
@@ -33,10 +33,10 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .filters = filters orelse &.{},
     });
-    lib_unit_tests.root_module.addIncludePath(liblsquic_dep.path("include"));
+    lib_unit_tests.root_module.addIncludePath(upstream.path("include"));
     lib_unit_tests.root_module.linkLibrary(liblsquic);
     lib_unit_tests.root_module.linkSystemLibrary("zlib", .{});
-    b.installArtifact(lib);
+    b.installArtifact(lsquic);
 
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
     const test_step = b.step("test", "Run unit tests");

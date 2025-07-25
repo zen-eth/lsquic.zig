@@ -122,55 +122,65 @@ pub const Settings = extern struct {
     es_max_udp_payload_size_rx: c_ushort,
     /// Grease QUIC bit
     es_grease_quic_bit: c_int,
+
+    pub fn init(settings: *Settings, flags: c_uint) void {
+        c.lsquic_engine_init_settings(@ptrCast(settings), flags);
+    }
+
+    pub fn check(settings: *Settings, flags: c_uint, err_buf: []u8) bool {
+        return c.lsquic_engine_check_settings(@ptrCast(settings), flags, @ptrCast(err_buf), err_buf.len) != 0;
+    }
 };
 
 pub const EngineApi = struct {
+    // Settings
+    ea_settings: ?*const Settings,
+
     /// Functions linked to `Connection` and `Stream` events. These are mandatory.
-    streamIf: StreamIf,
-    streamIfCtx: ?*anyopaque,
+    ea_stream_if: *const StreamIf,
+    ea_stream_if_ctx: ?*anyopaque,
 
     /// Function to send packets out.
-    packetsOut: PacketsOutFn,
-    packetsOutCtx: ?*anyopaque,
-
-    // Settings
-    settings: ?*const c.lsquic_engine_settings,
+    ea_packets_out: PacketsOutFn,
+    ea_packets_out_ctx: ?*anyopaque,
 
     /// Function to look up certificate to use. Necessary in server-mode.
-    lookupCert: ?LookupCertFn,
-    certLuCtx: ?*anyopaque,
+    ea_lookup_cert: ?LookupCertFn,
+    ea_cert_lu_ctx: ?*anyopaque = null,
 
     // SSL context callback
     /// Function to fetch SSL context. Optional in client-mode.
-    getSslCtx: ?GetSslCtxFn,
+    ea_get_ssl_ctx: ?GetSslCtxFn,
 
     // Other optional callbacks
-    hsiIf: ?*const c.lsquic_hset_if,
-    hsiCtx: ?*anyopaque,
-    alpn: ?[*:0]const u8,
+    ea_hsi_if: ?*const c.lsquic_hset_if,
+    ea_hsi_ctx: ?*anyopaque,
+    ea_alpn: ?[*:0]const u8,
 
     /// The `PacketsOutFn` function and `StreamIf` struct of functions are mandatory on initialization.
     ///
     /// In server mode, `LookupCertFn` is mandatory.
     /// In client mode, `GetSslCtxFn` is optional.
     pub fn init(
+        settings: *Settings,
+        stream_if: *const StreamIf,
+        stream_if_ctx: ?*anyopaque,
         packets_out: PacketsOutFn,
-        stream_if: StreamIf,
+        packets_out_ctx: ?*anyopaque,
         lookup_cert: ?LookupCertFn,
         get_ssl_ctx: ?GetSslCtxFn,
     ) EngineApi {
         return .{
-            .packetsOut = packets_out,
-            .packetsOutCtx = null,
-            .streamIf = stream_if,
-            .streamIfCtx = null,
-            .settings = null,
-            .lookupCert = lookup_cert,
-            .certLuCtx = null,
-            .getSslCtx = get_ssl_ctx,
-            .hsiIf = null,
-            .hsiCtx = null,
-            .alpn = null,
+            .ea_settings = settings,
+            .ea_packets_out = packets_out,
+            .ea_packets_out_ctx = packets_out_ctx,
+            .ea_stream_if = stream_if,
+            .ea_stream_if_ctx = stream_if_ctx,
+            .ea_lookup_cert = lookup_cert,
+            .ea_get_ssl_ctx = get_ssl_ctx,
+            .ea_hsi_if = null,
+            .ea_hsi_ctx = null,
+            .ea_alpn = null,
         };
     }
 };
@@ -180,21 +190,21 @@ pub const Engine = extern struct {
     pub fn new(flags: c_uint, api: *const EngineApi) EngineError!*Engine {
         // Convert our Zig EngineApi to C's lsquic_engine_api
         if (flags == EngineFlags.SERVER) {
-            if (api.lookupCert == null) return EngineError.InvalidSettings;
-            if (api.getSslCtx == null) return EngineError.InvalidSettings;
+            if (api.ea_lookup_cert == null) return EngineError.InvalidSettings;
+            if (api.ea_get_ssl_ctx == null) return EngineError.InvalidSettings;
         }
         var c_api: c.lsquic_engine_api = .{
-            .ea_packets_out = api.packetsOut,
-            .ea_packets_out_ctx = api.packetsOutCtx,
-            .ea_stream_if = @ptrCast(&api.streamIf),
-            .ea_stream_if_ctx = api.streamIfCtx,
-            .ea_settings = api.settings,
-            .ea_lookup_cert = api.lookupCert.?,
-            .ea_cert_lu_ctx = api.certLuCtx,
-            .ea_get_ssl_ctx = if (api.getSslCtx) |gsc| gsc else null,
-            .ea_hsi_if = api.hsiIf,
-            .ea_hsi_ctx = api.hsiCtx,
-            .ea_alpn = api.alpn,
+            .ea_settings = @ptrCast(api.ea_settings),
+            .ea_packets_out = api.ea_packets_out,
+            .ea_packets_out_ctx = api.ea_packets_out_ctx,
+            .ea_stream_if = @ptrCast(&api.ea_stream_if),
+            .ea_stream_if_ctx = api.ea_stream_if_ctx,
+            .ea_lookup_cert = api.ea_lookup_cert.?,
+            .ea_cert_lu_ctx = api.ea_cert_lu_ctx,
+            .ea_get_ssl_ctx = if (api.ea_get_ssl_ctx) |gsc| gsc else null,
+            .ea_hsi_if = api.ea_hsi_if,
+            .ea_hsi_ctx = api.ea_hsi_ctx,
+            .ea_alpn = api.ea_alpn,
         };
 
         const engine_ptr = c.lsquic_engine_new(flags, &c_api);
@@ -211,9 +221,9 @@ pub const Engine = extern struct {
         peer_ctx: anytype, // TODO: type?
         ecn: anytype,
     ) !void {
-        if (try c.lsquic_engine_packet_in(
+        if (c.lsquic_engine_packet_in(
             @ptrCast(self),
-            data,
+            @ptrCast(data),
             data.len,
             local,
             peer,
@@ -222,7 +232,39 @@ pub const Engine = extern struct {
         ) == -1) return error.PacketInError;
     }
 
+    pub fn connect(
+        self: *Engine,
+        version: lsquic.LsquicVersion,
+        local_sa: ?*const SockAddr,
+        peer_sa: ?*const SockAddr,
+        peer_ctx: ?*anyopaque,
+        conn_ctx: ?*lsquic.ConnectionContext,
+        hostname: ?[]const u8,
+        base_plpmtu: ?c_ushort,
+        sess_resume: ?[]const u8,
+        sess_resume_len: ?usize,
+        token: ?[]const u8,
+        token_sz: ?usize,
+    ) void {
+        c.lsquic_engine_connect(
+            @ptrCast(self),
+            @intFromEnum(version),
+            local_sa,
+            peer_sa,
+            peer_ctx,
+            conn_ctx,
+            hostname,
+            base_plpmtu,
+            sess_resume,
+            sess_resume_len,
+            token,
+            token_sz,
+        );
+        // c.lsquic_engine_connect(?*lsquic_engine_t, enum_lsquic_version, local_sa: ?*const struct_sockaddr, peer_sa: ?*const struct_sockaddr, peer_ctx: ?*anyopaque, conn_ctx: ?*lsquic_conn_ctx_t, hostname: [*c]const u8, base_plpmtu: c_ushort, sess_resume: [*c]const u8, sess_resume_len: usize, token: [*c]const u8, token_sz: usize);
+
+    }
     /// Returns true if there are connections to be processed, false otherwise.
+    ///
     pub fn earliestAdvTick(self: *Engine, diff: [*c]c_int) bool {
         return c.lsquic_engine_earliest_adv_tick(@ptrCast(self), diff) != 0;
     }
@@ -268,6 +310,7 @@ test "Engine creation fails with invalid settings" {
 const std = @import("std");
 const testing = std.testing;
 const StreamIf = @import("stream.zig").StreamIf;
+const SockAddr = @import("lsquic.zig").SockAddr;
 
 const c = @cImport({
     @cInclude("lsquic.h");

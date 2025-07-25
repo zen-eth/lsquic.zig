@@ -202,6 +202,14 @@ pub const Stream = extern struct {
         return @ptrCast(c.lsquic_stream_conn(stream_ptr));
     }
 
+    pub fn wantWrite(self: *Stream, is_want: bool) bool {
+        return c.lsquic_stream_wantwrite(@ptrCast(self), @intCast(@intFromBool(is_want))) != 0;
+    }
+
+    pub fn wantRead(self: *Stream, is_want: bool) bool {
+        return c.lsquic_stream_wantread(@ptrCast(self), @intCast(@intFromBool(is_want))) != 0;
+    }
+
     pub fn read(self: *Stream, buf: []u8, buflen: usize) void {
         _ = c.lsquic_stream_read(@ptrCast(self), @ptrCast(buf), buflen);
     }
