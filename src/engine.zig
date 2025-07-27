@@ -226,11 +226,12 @@ pub const Engine = extern struct {
             peer_sa,
             peer_ctx,
             conn_ctx,
-            @ptrCast(hostname.?),
+            // Optional arguments
+            if (hostname) |hn| @ptrCast(hn) else null,
             if (base_plpmtu) |bp| bp else c.LSQUIC_DF_BASE_PLPMTU,
-            @ptrCast(sess_resume),
+            if (sess_resume) |sr| @ptrCast(sr) else null,
             if (sess_resume_len) |l| l else 0,
-            @ptrCast(token),
+            if (token) |t| @ptrCast(t) else null,
             if (token_sz) |s| s else 0,
         ));
     }
