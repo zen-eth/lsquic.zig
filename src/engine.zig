@@ -166,11 +166,6 @@ pub const EngineApi = struct {
 /// LSQUIC Engine wrapper
 pub const Engine = extern struct {
     pub fn new(flags: c_uint, api: *const EngineApi) EngineError!*Engine {
-        // Convert our Zig EngineApi to C's lsquic_engine_api
-        if (flags == EngineFlags.SERVER) {
-            if (api.ea_lookup_cert == null) return EngineError.InvalidSettings;
-            if (api.ea_get_ssl_ctx == null) return EngineError.InvalidSettings;
-        }
         var c_api: c.lsquic_engine_api = .{
             .ea_settings = @ptrCast(api.ea_settings),
             .ea_packets_out = api.ea_packets_out,
