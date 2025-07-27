@@ -1,6 +1,5 @@
 // Re-export the C types for convenience
 // pub const Conn = c.lsquic_conn_t;
-pub const ConnectionContext = c.lsquic_conn_ctx_t;
 // pub const StreamRaw = c.lsquic_stream_t;
 // pub const StreamContext = c.lsquic_stream_ctx_t;
 pub const OutSpec = c.lsquic_out_spec;
@@ -106,6 +105,9 @@ pub const StreamContext = @import("stream.zig").StreamContext;
 pub const StreamIf = @import("stream.zig").StreamIf;
 pub const StreamId = @import("stream.zig").StreamId;
 pub const StreamRaw = @import("stream.zig").StreamRaw;
+pub const Hsk = @import("stream.zig").Hsk;
+
+pub const ConnectionContext = @import("connection.zig").ConnectionContext;
 
 test {
     testing.refAllDeclsRecursive(@This());

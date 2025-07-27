@@ -10,8 +10,12 @@ pub const Connection = extern struct {
         return @ptrCast(c.lsquic_conn_get_engine(conn_ptr));
     }
 
-    pub fn getContext(self: *Connection) void {
-        _ = self;
+    pub fn setContext(self: *Connection, context: ?*ConnectionContext) void {
+        c.lsquic_conn_set_ctx(@ptrCast(self), context);
+    }
+
+    pub fn getContext(self: *Connection) ?*ConnectionContext {
+        return @ptrCast(c.lsquic_conn_get_ctx(@ptrCast(self)));
     }
 
     pub fn makeStream(self: *Connection) void {
@@ -21,12 +25,14 @@ pub const Connection = extern struct {
     pub fn wantDatagramWrite(self: *Connection, is_want: c_int) c_int {
         return c.lsquic_conn_want_datagram_write(@ptrCast(self), is_want);
     }
+
     pub fn close(self: *Connection) void {
         return c.lsquic_conn_close(@ptrCast(self));
     }
 };
 
 const Engine = @import("engine.zig").Engine;
+pub const ConnectionContext = c.lsquic_conn_ctx_t;
 
 pub const Cid = c.lsquic_cid_t;
 

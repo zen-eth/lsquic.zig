@@ -197,7 +197,7 @@ pub const Stream = extern struct {
     sm_hist_buf: if (LSQUIC_KEEP_STREAM_HISTORY) [1 << SM_HIST_BITS]u8 else void,
 
     /// Get the connection this stream belongs to
-    pub fn getConnectionection(self: *const Stream) *Connection {
+    pub fn getConnection(self: *const Stream) *Connection {
         const stream_ptr: *const c.lsquic_stream_t = @ptrCast(self);
         return @ptrCast(c.lsquic_stream_conn(stream_ptr));
     }
@@ -210,12 +210,16 @@ pub const Stream = extern struct {
         return c.lsquic_stream_wantread(@ptrCast(self), @intCast(@intFromBool(is_want))) != 0;
     }
 
-    pub fn read(self: *Stream, buf: []u8, buflen: usize) void {
-        _ = c.lsquic_stream_read(@ptrCast(self), @ptrCast(buf), buflen);
+    pub fn read(self: *Stream, buf: []u8, buflen: usize) isize {
+        return c.lsquic_stream_read(@ptrCast(self), @ptrCast(buf), buflen);
     }
 
-    pub fn write(self: *Stream, buf: []u8, buflen: usize) void {
-        _ = c.lsquic_stream_write(@ptrCast(@alignCast(self)), @ptrCast(buf), buflen);
+    pub fn write(self: *Stream, buf: []u8, buflen: usize) isize {
+        return c.lsquic_stream_write(@ptrCast(@alignCast(self)), @ptrCast(buf), buflen);
+    }
+
+    pub fn close(self: *Stream) bool {
+        return c.lsquic_stream_close(@ptrCast(self)) != 0;
     }
 };
 
@@ -351,6 +355,13 @@ pub const SendCtl = opaque {};
 pub const Hash = opaque {};
 const Engine = @import("engine.zig").Engine;
 pub const HskStatus = c.lsquic_hsk_status;
+pub const Hsk = enum(c_int) {
+    Fail = 0,
+    Ok = 1,
+    ResumedOk = 2,
+    ResumedFail = 3,
+};
+
 pub const StreamId = u64;
 
 pub const ConnectionectionContext = c.lsquic_conn_ctx_t;

@@ -26,102 +26,80 @@ const lsquic = @import("lsquic.zig");
 
 pub const Settings = extern struct {
     es_versions: c_uint,
-    /// Initial default connection flow control window
     es_cfcw: c_uint,
-    /// Initial default stream flow control window
     es_sfcw: c_uint,
-    /// Maximum allowed value CFCW is allowed to reach due to window auto-tuning
     es_max_cfcw: c_uint,
-    /// Maximum value stream flow control window is allowed to reach
     es_max_sfcw: c_uint,
-    /// Maximum incoming streams, aka MIDS.
-    ///
-    /// Google QUIC only.
     es_max_streams_in: c_uint,
-    /// Handshake timeout in microseconds.
-    es_handshake_to: c_ulong = c.LSQUIC_DF_HANDSHAKE_TO,
-    /// Idle connection timeout, ICSL, in microseconds.
-    ///
-    /// Google QUIC only.
-    es_idle_conn_to: c_ulong = c.LSQUIC_DF_IDLE_CONN_TO,
-    /// When true, CONNECTION_CLOSE is not sent when connection times out.
+    es_handshake_to: c_ulong,
+    es_idle_conn_to: c_ulong,
     es_silent_close: c_int,
-    /// Corresponds to `SETTINGS_MAX_HEADER_LIST_SIZE`: https://datatracker.ietf.org/doc/html/rfc7540.html#section-6.5.2
-    es_max_header_list_size: c_uint = c.LSQUIC_DF_MAX_HEADER_LIST_SIZE,
-    /// User-Agent ID
-    es_ua: [*:0]const u8,
-    /// Maximum number of incoming connections
+    es_max_header_list_size: c_uint,
+    es_ua: [*c]const u8,
+    es_sttl: u64,
+    es_pdmd: u32,
+    es_aead: u32,
+    es_kexs: u32,
     es_max_inchoate: c_uint,
-    /// Enable/disable server push
+    es_support_srej: c_int,
     es_support_push: c_int,
-    /// Support TCID0
     es_support_tcid0: c_int,
-    /// Support NSTP
     es_support_nstp: c_int,
-    /// Honor prst
     es_honor_prst: c_int,
-    /// Send prst
     es_send_prst: c_int,
-    /// Progress check
     es_progress_check: c_uint,
-    /// Read/write once
     es_rw_once: c_int,
-    /// Process time threshold
     es_proc_time_thresh: c_uint,
-    /// Pace packets
     es_pace_packets: c_int,
-    /// Clock granularity
     es_clock_granularity: c_uint,
-    /// Congestion control algorithm
     es_cc_algo: c_uint,
-    /// Congestion control RTT threshold
     es_cc_rtt_thresh: c_uint,
-    /// No progress timeout
     es_noprogress_timeout: c_uint,
-    /// Initial max data
     es_init_max_data: c_uint,
-    /// Initial max stream data bidirectional remote
     es_init_max_stream_data_bidi_remote: c_uint,
-    /// Initial max stream data bidirectional local
     es_init_max_stream_data_bidi_local: c_uint,
-    /// Initial max stream data unidirectional
     es_init_max_stream_data_uni: c_uint,
-    /// Initial max streams bidirectional
     es_init_max_streams_bidi: c_uint,
-    /// Initial max streams unidirectional
     es_init_max_streams_uni: c_uint,
-    /// Idle timeout
     es_idle_timeout: c_uint,
-    /// Ping period
     es_ping_period: c_uint,
-    /// Source Connection ID length
     es_scid_len: c_uint,
-    /// Source Connection ID issuance rate
     es_scid_iss_rate: c_uint,
-    /// QPACK decoder maximum size
     es_qpack_dec_max_size: c_uint,
-    /// QPACK decoder maximum blocked
     es_qpack_dec_max_blocked: c_uint,
-    /// QPACK encoder maximum size
     es_qpack_enc_max_size: c_uint,
-    /// QPACK encoder maximum blocked
     es_qpack_enc_max_blocked: c_uint,
-    /// Enable ECN support
     es_ecn: c_int,
-    /// Allow migration
     es_allow_migration: c_int,
-    /// QL bits
+    es_retry_token_duration: c_uint,
     es_ql_bits: c_int,
-    /// Spin bit
     es_spin: c_int,
-    /// Delayed ACKs
     es_delayed_acks: c_int,
-    /// Timestamps
     es_timestamps: c_int,
-    /// Maximum UDP payload size for RX
     es_max_udp_payload_size_rx: c_ushort,
-    /// Grease QUIC bit
     es_grease_quic_bit: c_int,
+    es_dplpmtud: c_int,
+    es_base_plpmtu: c_ushort,
+    es_max_plpmtu: c_ushort,
+    es_mtu_probe_timer: c_uint,
+    es_datagrams: c_int,
+    es_optimistic_nat: c_int,
+    es_ext_http_prio: c_int,
+    es_qpack_experiment: c_int,
+    es_ptpc_periodicity: c_uint,
+    es_ptpc_max_packtol: c_uint,
+    es_ptpc_dyn_target: c_int,
+    es_ptpc_target: f32,
+    es_ptpc_prop_gain: f32,
+    es_ptpc_int_gain: f32,
+    es_ptpc_err_thresh: f32,
+    es_ptpc_err_divisor: f32,
+    es_delay_onclose: c_int,
+    es_max_batch_size: c_uint,
+    es_check_tp_sanity: c_int,
+    es_amp_factor: c_int,
+    es_send_verneg: c_int,
+    es_preferred_address: [24]u8,
 
     pub fn init(settings: *Settings, flags: c_uint) void {
         c.lsquic_engine_init_settings(@ptrCast(settings), flags);
@@ -245,23 +223,21 @@ pub const Engine = extern struct {
         sess_resume_len: ?usize,
         token: ?[]const u8,
         token_sz: ?usize,
-    ) void {
-        c.lsquic_engine_connect(
+    ) ?*Connection {
+        return @ptrCast(c.lsquic_engine_connect(
             @ptrCast(self),
             @intFromEnum(version),
             local_sa,
             peer_sa,
             peer_ctx,
             conn_ctx,
-            hostname,
-            base_plpmtu,
-            sess_resume,
-            sess_resume_len,
-            token,
-            token_sz,
-        );
-        // c.lsquic_engine_connect(?*lsquic_engine_t, enum_lsquic_version, local_sa: ?*const struct_sockaddr, peer_sa: ?*const struct_sockaddr, peer_ctx: ?*anyopaque, conn_ctx: ?*lsquic_conn_ctx_t, hostname: [*c]const u8, base_plpmtu: c_ushort, sess_resume: [*c]const u8, sess_resume_len: usize, token: [*c]const u8, token_sz: usize);
-
+            @ptrCast(hostname.?),
+            if (base_plpmtu) |bp| bp else c.LSQUIC_DF_BASE_PLPMTU,
+            @ptrCast(sess_resume),
+            if (sess_resume_len) |l| l else 0,
+            @ptrCast(token),
+            if (token_sz) |s| s else 0,
+        ));
     }
     /// Returns true if there are connections to be processed, false otherwise.
     ///
@@ -310,7 +286,10 @@ test "Engine creation fails with invalid settings" {
 const std = @import("std");
 const testing = std.testing;
 const StreamIf = @import("stream.zig").StreamIf;
+const Connection = @import("connection.zig").Connection;
 const SockAddr = @import("lsquic.zig").SockAddr;
+
+pub const Settings2 = c.lsquic_engine_settings;
 
 const c = @cImport({
     @cInclude("lsquic.h");
