@@ -218,6 +218,10 @@ pub const Stream = extern struct {
         return c.lsquic_stream_write(@ptrCast(@alignCast(self)), @ptrCast(buf), buflen);
     }
 
+    pub fn flush(self: *Stream) c_int {
+        return c.lsquic_stream_flush(@ptrCast(@alignCast(self)));
+    }
+
     pub fn close(self: *Stream) bool {
         return c.lsquic_stream_close(@ptrCast(self)) != 0;
     }
@@ -355,13 +359,6 @@ pub const SendCtl = opaque {};
 pub const Hash = opaque {};
 const Engine = @import("engine.zig").Engine;
 pub const HskStatus = c.lsquic_hsk_status;
-pub const Hsk = enum(c_int) {
-    Fail = 0,
-    Ok = 1,
-    ResumedOk = 2,
-    ResumedFail = 3,
-};
-
 pub const StreamId = u64;
 
 pub const ConnectionectionContext = c.lsquic_conn_ctx_t;

@@ -92,9 +92,15 @@ fn newStream() Stream {}
 const std = @import("std");
 const testing = std.testing;
 
-const Engine = engine.Engine;
-pub const engine = @import("engine.zig");
-pub const connection = @import("connection.zig");
+const engine = @import("engine.zig");
+pub const Engine = engine.Engine;
+pub const EngineFlags = engine.EngineFlags;
+pub const EngineApi = engine.EngineApi;
+pub const EngineSettings = engine.Settings;
+
+const connection = @import("connection.zig");
+pub const Connection = connection.Connection;
+pub const ConnectionContext = connection.ConnectionContext;
 
 pub const SslCtx = c.struct_ssl_ctx_st;
 
@@ -105,9 +111,14 @@ pub const StreamContext = @import("stream.zig").StreamContext;
 pub const StreamIf = @import("stream.zig").StreamIf;
 pub const StreamId = @import("stream.zig").StreamId;
 pub const StreamRaw = @import("stream.zig").StreamRaw;
-pub const Hsk = @import("stream.zig").Hsk;
+pub const Hsk = @import("hsk.zig");
 
-pub const ConnectionContext = @import("connection.zig").ConnectionContext;
+pub const LSQ_HSK_FAIL: c_int = 0;
+pub const LSQ_HSK_OK: c_int = 1;
+pub const LSQ_HSK_RESUMED_OK: c_int = 2;
+pub const LSQ_HSK_RESUMED_FAIL: c_int = 3;
+
+pub const LSQUIC_DF_CLOCK_GRANULARITY = c.LSQUIC_DF_CLOCK_GRANULARITY;
 
 test {
     testing.refAllDeclsRecursive(@This());

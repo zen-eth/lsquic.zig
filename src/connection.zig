@@ -15,7 +15,7 @@ pub const Connection = extern struct {
     }
 
     pub fn getContext(self: *Connection) ?*ConnectionContext {
-        return @ptrCast(c.lsquic_conn_get_ctx(@ptrCast(self)));
+        return @ptrCast(@alignCast(c.lsquic_conn_get_ctx(@ptrCast(self))));
     }
 
     pub fn makeStream(self: *Connection) void {
@@ -28,6 +28,10 @@ pub const Connection = extern struct {
 
     pub fn close(self: *Connection) void {
         return c.lsquic_conn_close(@ptrCast(self));
+    }
+
+    pub fn nPendingStreams(self: *Connection) c_uint {
+        return c.lsquic_conn_n_pending_streams(@ptrCast(self));
     }
 };
 

@@ -1,4 +1,8 @@
-const EngineError = error{ CreationFailed, InvalidSettings };
+const EngineError = error{
+    CreationFailed,
+    InvalidSettings,
+    MissingLookupCert,
+};
 
 pub const EngineFlags = struct {
     pub const SERVER = c.LSENG_SERVER;
@@ -123,7 +127,7 @@ pub const EngineApi = struct {
     ea_packets_out_ctx: ?*anyopaque,
 
     /// Function to look up certificate to use. Necessary in server-mode.
-    ea_lookup_cert: ?LookupCertFn,
+    ea_lookup_cert: ?LookupCertFn = null,
     ea_cert_lu_ctx: ?*anyopaque = null,
 
     // SSL context callback
@@ -131,9 +135,9 @@ pub const EngineApi = struct {
     ea_get_ssl_ctx: ?GetSslCtxFn,
 
     // Other optional callbacks
-    ea_hsi_if: ?*const c.lsquic_hset_if,
-    ea_hsi_ctx: ?*anyopaque,
-    ea_alpn: ?[*:0]const u8,
+    ea_hsi_if: ?*const c.lsquic_hset_if = null,
+    ea_hsi_ctx: ?*anyopaque = null,
+    ea_alpn: ?[*:0]const u8 = null,
 
     /// The `PacketsOutFn` function and `StreamIf` struct of functions are mandatory on initialization.
     ///
@@ -166,6 +170,10 @@ pub const EngineApi = struct {
 /// LSQUIC Engine wrapper
 pub const Engine = extern struct {
     pub fn new(flags: c_uint, api: *const EngineApi) EngineError!*Engine {
+        //TODO(bing): server should check that lookup cert exist
+        //if (flags == EngineFlags.SERVER) {
+        //    if (api.ea_lookup_cert == null) return error.MissingLookupCert;
+        //}
         var c_api: c.lsquic_engine_api = .{
             .ea_settings = @ptrCast(api.ea_settings),
             .ea_packets_out = api.ea_packets_out,
@@ -219,26 +227,28 @@ pub const Engine = extern struct {
         token: ?[]const u8,
         token_sz: ?usize,
     ) ?*Connection {
-        return @ptrCast(c.lsquic_engine_connect(
-            @ptrCast(self),
+        const conn = c.lsquic_engine_connect(
+            @ptrCast(@alignCast(self)),
             @intFromEnum(version),
-            local_sa,
-            peer_sa,
-            peer_ctx,
-            conn_ctx,
+            @ptrCast(@alignCast(local_sa)),
+            @ptrCast(@alignCast(peer_sa)),
+            @ptrCast(@alignCast(peer_ctx)),
+            @ptrCast(@alignCast(conn_ctx)),
             // Optional arguments
-            if (hostname) |hn| @ptrCast(hn) else null,
+            if (hostname) |hn| @ptrCast(hn) else "",
             if (base_plpmtu) |bp| bp else c.LSQUIC_DF_BASE_PLPMTU,
-            if (sess_resume) |sr| @ptrCast(sr) else null,
+            if (sess_resume) |sr| @ptrCast(sr) else "",
             if (sess_resume_len) |l| l else 0,
-            if (token) |t| @ptrCast(t) else null,
+            if (token) |t| @ptrCast(t) else "",
             if (token_sz) |s| s else 0,
-        ));
+        );
+
+        return @ptrCast(conn);
     }
     /// Returns true if there are connections to be processed, false otherwise.
     ///
-    pub fn earliestAdvTick(self: *Engine, diff: [*c]c_int) bool {
-        return c.lsquic_engine_earliest_adv_tick(@ptrCast(self), diff) != 0;
+    pub fn earliestAdvTick(self: *Engine, diff: [*c]c_int) c_int {
+        return c.lsquic_engine_earliest_adv_tick(@ptrCast(self), diff);
     }
 
     /// Closes all mini connections and marks all full connections as going away.
