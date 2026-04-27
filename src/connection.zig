@@ -1,5 +1,5 @@
-/// Connection wrapper
-pub const Connection = extern struct {
+/// Opaque QUIC connection handle.
+pub const Connection = opaque {
     pub fn getId(self: *const Connection) *const Cid {
         const conn_ptr: *const c.lsquic_conn_t = @ptrCast(self);
         return c.lsquic_conn_id(conn_ptr);

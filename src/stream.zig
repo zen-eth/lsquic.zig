@@ -1,201 +1,12 @@
-// Enum for send headers state
-pub const SendHeadersState = enum(u8) {
-    SSHS_BEGIN = 0,
-    SSHS_ENC_SENDING = 1,
-    SSHS_HBLOCK_SENDING = 2,
-};
+const std = @import("std");
+const testing = std.testing;
 
-pub const ConnectionCap = extern struct {
-    cc_max: u64,
-    cc_sent: u64,
-    cc_tosend: u64,
-    cc_blocked: bool,
-    cc_limited: bool,
-};
+const Connection = @import("connection.zig").Connection;
 
-// Additional forward declarations
-pub const StreamsTailq = extern struct {
-    tqh_first: ?*StreamRaw,
-    tqh_last: ?**StreamRaw,
-};
-// Queue/List types
-pub const TailqEntry = extern struct {
-    tqe_next: ?*anyopaque,
-    tqe_prev: ?*anyopaque,
-};
-
-pub const StailqHead = extern struct {
-    stqh_first: ?*anyopaque,
-    stqh_last: ?*anyopaque,
-};
-
-pub const SlistHead = extern struct {
-    slh_first: ?*anyopaque,
-};
-
-pub const RttStats = extern struct {
-    srtt: u32,
-    rttvar: u32,
-    min_rtt: u32,
-    max_ack_delay: u32,
-};
-
-pub const EnginePublic = opaque {};
-pub const Malo = opaque {};
-pub const Mm = opaque {};
-pub const HeadersStream = opaque {};
-pub const QpackEncHdl = opaque {};
-pub const QpackDecHdl = opaque {};
-pub const HcsoWriter = opaque {};
-pub const ConnectionStats = opaque {};
-
-pub const ConnectionPublicFlags = enum(c_uint) {
-    CP_STREAM_UNBLOCKED = 1 << 0,
-    _,
-};
-
-pub const ConnectionPublic = extern struct {
-    sending_streams: StreamsTailq,
-    read_streams: StreamsTailq,
-    write_streams: StreamsTailq,
-    service_streams: StreamsTailq,
-    all_streams: ?*Hash,
-    cfcw: Cfcw,
-    conn_cap: ConnectionCap,
-    rtt_stats: RttStats,
-    enpub: ?*EnginePublic,
-    packet_out_malo: ?*Malo,
-    lconn: ?*Connection,
-    mm: ?*Mm,
-    u: extern union {
-        gquic: extern struct {
-            hs: ?*HeadersStream,
-        },
-        ietf: extern struct {
-            qeh: ?*QpackEncHdl,
-            qdh: ?*QpackDecHdl,
-            hcso: ?*HcsoWriter,
-            promises: ?*Hash,
-        },
-    },
-    cp_flags: ConnectionPublicFlags,
-    send_ctl: ?*SendCtl,
-    conn_stats: if (LSQUIC_CONN_STATS) ?*ConnectionStats else void,
-    path: ?*NetworkPath,
-    stream_frame_bytes: if (LSQUIC_EXTRA_CHECKS) c_ulong else void,
-    wtp_level: if (LSQUIC_EXTRA_CHECKS) c_uint else void,
-    bytes_in: c_uint,
-    bytes_out: c_uint,
-    last_tick: Time,
-    last_prog: Time,
-    max_peer_ack_usec: c_uint,
-    n_special_streams: u8,
-};
-pub const Cfcw = extern struct {
-    max_recv_off: u64,
-    recv_off: u64,
-    read_off: u64,
-    max_recv_win: usize,
-};
-
-pub const StreamFlowControlWindow = extern struct {
-    cfcw: Cfcw,
-    sf_max_recv_off: u64,
-    sf_recv_off: u64,
-    sf_read_off: u64,
-    sf_last_updated: Time,
-    sf_conn_pub: [*c]ConnectionPublic,
-    sf_max_recv_win: usize,
-    sf_stream_id: StreamId,
-};
-
-/// Stream wrapper
-pub const Stream = extern struct {
-    sm_hash_el: HashElement,
-    id: StreamId,
-    stream_flags: StreamFlags,
-    sm_bflags: StreamBFlags,
-    sm_qflags: StreamQFlags,
-    n_unacked: u32,
-
-    stream_if: ?*const StreamIf,
-    st_ctx: ?*StreamContext,
-    conn_pub: ?*ConnectionPublic,
-
-    // TAILQ entries for various linked lists
-    next_send_stream: TailqEntry,
-    next_read_stream: TailqEntry,
-    next_write_stream: TailqEntry,
-    next_service_stream: TailqEntry,
-    next_prio_stream: TailqEntry,
-
-    tosend_off: u64,
-    sm_payload: u64,
-    max_send_off: u64,
-    sm_last_recv_off: u64,
-    error_code: u64,
-
-    data_in: ?*DataIn,
-    read_offset: u64,
-    fc: StreamFlowControlWindow,
-
-    sm_hq_frames: StailqHead,
-    sm_hq_frame_arr: [NUM_ALLOCED_HQ_FRAMES]StreamHqFrame,
-    sm_hq_filter: HqFilter,
-    sm_hq_arr: ?*HqArr,
-
-    sm_flush_to: u64,
-    sm_flush_to_payload: u64,
-    blocked_off: u64,
-
-    uh: ?*UncompressedHeaders,
-    push_req: ?*UncompressedHeaders,
-    sm_hblock_ctx: ?*HblockCtx,
-
-    sm_buf: ?*u8,
-    sm_onnew_arg: ?*anyopaque,
-
-    sm_header_block: ?*u8,
-    sm_hb_compl: u64,
-
-    sm_fin_off: u64,
-
-    // Function pointers
-    sm_frame_header_sz: ?*const fn (*const Stream, u32) usize,
-    sm_write_to_packet: ?*const fn (*FrameGenCtx, usize) SwtpStatus,
-    sm_write_avail: ?*const fn (*Stream) usize,
-    sm_readable: ?*const fn (*Stream) c_int,
-    sm_get_packet_for_stream: ?*const fn (*SendCtl, u32, *const NetworkPath, *const Stream) ?*PacketOut,
-
-    sm_sfi: ?*const StreamFilterIf,
-
-    sm_promise: ?*PushPromise,
-    sm_promises: SlistHead,
-
-    sm_last_frame_off: u64,
-
-    sm_last_prog: Time,
-
-    sm_cont_len: c_ulonglong,
-    sm_data_in: c_ulonglong,
-
-    sm_hblock_sz: u32,
-    sm_hblock_off: u32,
-
-    sm_n_buffered: u16,
-    sm_n_allocated: u16,
-
-    sm_priority: u8,
-    sm_enc_level: u8,
-    sm_send_headers_state: SendHeadersState,
-    sm_dflags: StreamDFlags,
-    sm_saved_want_write: i8,
-    sm_has_frame: i8,
-
-    webtransport_session_stream_id: if (LSQUIC_WEBTRANSPORT_SERVER_SUPPORT) StreamId else void,
-    sm_hist_idx: if (LSQUIC_KEEP_STREAM_HISTORY) HistIdx else void,
-    sm_hist_buf: if (LSQUIC_KEEP_STREAM_HISTORY) [1 << SM_HIST_BITS]u8 else void,
-
+/// Opaque QUIC stream handle. Layout is internal to lsquic and must not be
+/// accessed from Zig — use the methods below, all of which delegate to the
+/// public lsquic C API.
+pub const Stream = opaque {
     /// Get the connection this stream belongs to
     pub fn getConnection(self: *const Stream) *Connection {
         const stream_ptr: *const c.lsquic_stream_t = @ptrCast(self);
@@ -229,7 +40,15 @@ pub const Stream = extern struct {
 
 pub const StreamRaw = Stream;
 
-pub const OnNewConnectionFn = ?*const fn (?*anyopaque, ?*Connection) callconv(.c) ?*ConnectionectionContext;
+pub const StreamId = u64;
+
+pub const HskStatus = c.lsquic_hsk_status;
+
+pub const StreamContext = struct {};
+
+pub const ConnectionContext = @import("connection.zig").ConnectionContext;
+
+pub const OnNewConnectionFn = ?*const fn (?*anyopaque, ?*Connection) callconv(.c) ?*ConnectionContext;
 pub const OnGoawayReceivedFn = ?*const fn (?*Connection) callconv(.c) void;
 pub const OnConnectionClosedFn = ?*const fn (?*Connection) callconv(.c) void;
 pub const OnNewStreamFn = ?*const fn (?*anyopaque, ?*StreamRaw) callconv(.c) ?*StreamContext;
@@ -312,60 +131,7 @@ pub const StreamIf = extern struct {
     on_conncloseframe_received: OnConnectionCloseFrameReceivedFn = null,
 };
 
-fn newTestStream() Stream {}
-
 test "stream" {}
-
-// Type definitions for the stream struct
-pub const StreamFlags = u32;
-pub const StreamBFlags = u32;
-pub const StreamQFlags = u32;
-pub const StreamDFlags = u8;
-
-const lsquic = @import("lsquic.zig");
-
-const HashElement = lsquic.HashElement;
-const Time = lsquic.Time;
-const DataIn = lsquic.DataIn;
-
-pub const StreamHqFrame = extern struct { data: [64]u8 };
-pub const HqFilter = extern struct { data: [32]u8 };
-pub const HqArr = opaque {};
-pub const UncompressedHeaders = opaque {};
-pub const HblockCtx = opaque {};
-pub const FrameGenCtx = opaque {};
-pub const NetworkPath = opaque {};
-pub const PacketOut = opaque {};
-pub const StreamFilterIf = opaque {};
-pub const PushPromise = opaque {};
-// Constants
-pub const NUM_ALLOCED_HQ_FRAMES = 4;
-pub const SM_HIST_BITS = 6;
-pub const LSQUIC_WEBTRANSPORT_SERVER_SUPPORT = false;
-pub const LSQUIC_KEEP_STREAM_HISTORY = false;
-
-// Constants for conditional compilation
-pub const LSQUIC_CONN_STATS = false;
-pub const LSQUIC_EXTRA_CHECKS = false;
-
-/// Equivalent to `lsquic_packno_t`.
-pub const PackNo = u64;
-/// Equivalent to `lsquic_ver_tag_t`.
-pub const VerTag = u64;
-pub const SwtpStatus = u32;
-pub const HistIdx = u32;
-
-pub const SendCtl = opaque {};
-pub const Hash = opaque {};
-const Engine = @import("engine.zig").Engine;
-pub const HskStatus = c.lsquic_hsk_status;
-pub const StreamId = u64;
-
-pub const ConnectionectionContext = c.lsquic_conn_ctx_t;
-
-pub const StreamContext = struct {};
-
-const Connection = @import("connection.zig").Connection;
 
 const c = @cImport({
     @cInclude("lsquic.h");

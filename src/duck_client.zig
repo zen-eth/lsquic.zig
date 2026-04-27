@@ -5,9 +5,10 @@
 /// - https://github.com/dtikhonov/lsquic-tutorial
 fn send_packets_out(
     _: ?*anyopaque,
-    specs: [*c]const lsquic.OutSpec,
+    specs_raw: ?*const anyopaque,
     count: c_uint,
-) callconv(.C) c_int {
+) callconv(.c) c_int {
+    const specs: [*]const lsquic.OutSpec = @ptrCast(@alignCast(specs_raw.?));
     var msg: msghdr_const = undefined;
 
     var n: usize = 1;
@@ -55,7 +56,7 @@ fn clientOnNewStream(stream_if_ctx: ?*anyopaque, stream: ?*lsquic.StreamRaw) cal
 fn clientOnRead(stream: ?*lsquic.Stream, stream_ctx: ?*lsquic.StreamContext) callconv(.c) void {
     _ = stream_ctx;
     var buf: [10]u8 = [_]u8{0} ** 10;
-    if (stream) |s| s.read(&buf, buf.len);
+    if (stream) |s| _ = s.read(&buf, buf.len);
 }
 
 fn client_on_write(stream: ?*lsquic.StreamRaw, stream_ctx: ?*lsquic.StreamContext) callconv(.c) void {
@@ -83,10 +84,19 @@ pub fn main() !void {
 
     try lsquic.globalInit(lsquic.GlobalInitFlags.CLIENT);
     defer lsquic.globalCleanup();
-    var eapi = lsquic.engine.EngineApi.init(send_packets_out, client_callbacks);
 
-    eapi.packetsOutCtx = undefined;
-    eapi.streamIfCtx = undefined;
+    var settings: lsquic.engine.Settings = undefined;
+    lsquic.engine.initSettings(&settings, 0);
+
+    var eapi = lsquic.engine.EngineApi.init(
+        &settings,
+        &client_callbacks,
+        null,
+        send_packets_out,
+        null,
+        null,
+        null,
+    );
 
     _ = try lsquic.engine.Engine.new(lsquic.engine.EngineFlags.SERVER, &eapi);
 }

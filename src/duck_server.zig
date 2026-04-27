@@ -5,9 +5,10 @@
 /// - https://github.com/dtikhonov/lsquic-tutorial
 fn send_packets_out(
     _: ?*anyopaque,
-    specs: [*c]const lsquic.OutSpec,
+    specs_raw: ?*const anyopaque,
     count: c_uint,
-) callconv(.C) c_int {
+) callconv(.c) c_int {
+    const specs: [*]const lsquic.OutSpec = @ptrCast(@alignCast(specs_raw.?));
     var msg: msghdr_const = undefined;
 
     var n: usize = 1;
@@ -64,8 +65,8 @@ fn serverOnDatagram(
     buf: *const anyopaque,
     sz: usize,
 ) callconv(.c) void {
-    _ = sz;
-    std.debug.print("Received expected response: {s}\n", .{buf});
+    const slice = @as([*]const u8, @ptrCast(buf))[0..sz];
+    std.debug.print("Received expected response: {s}\n", .{slice});
     if (conn) |c| _ = c.wantDatagramWrite(1);
 }
 
@@ -98,9 +99,18 @@ const Server = struct {
 
         try lsquic.globalInit(lsquic.GlobalInitFlags.SERVER);
 
-        var eapi = lsquic.engine.EngineApi.init(send_packets_out, server_callbacks);
-        eapi.packetsOutCtx = undefined;
-        eapi.streamIfCtx = undefined;
+        var settings: lsquic.engine.Settings = undefined;
+        lsquic.engine.initSettings(&settings, lsquic.engine.EngineFlags.SERVER);
+
+        var eapi = lsquic.engine.EngineApi.init(
+            &settings,
+            &server_callbacks,
+            null,
+            send_packets_out,
+            null,
+            null,
+            null,
+        );
 
         const engine = try lsquic.engine.Engine.new(lsquic.engine.EngineFlags.SERVER, &eapi);
 

@@ -1,22 +1,23 @@
 // Re-export the C types for convenience
-// pub const Conn = c.lsquic_conn_t;
-// pub const StreamRaw = c.lsquic_stream_t;
+pub const Conn = @import("connection.zig").Connection;
+pub const StreamT = c.lsquic_stream_t;
 // pub const StreamContext = c.lsquic_stream_ctx_t;
 pub const OutSpec = c.lsquic_out_spec;
 pub const SockAddr = c.struct_sockaddr;
 pub const IoVec = c.struct_iovec;
 pub const SslCtxSt = c.struct_ssl_ctx_st;
 
-pub const LsquicVersion = enum(u8) {
-    V043 = c.LSQVER_043,
-    V046 = c.LSQVER_046,
-    V050 = c.LSQVER_050,
-    V_ID27 = c.LSQVER_ID27,
-    V_ID29 = c.LSQVER_ID29,
-    V_I001 = c.LSQVER_I001,
-    V_I002 = c.LSQVER_I002,
-    /// Special value indicating the number of versions in the enum. It may be used as argument to `engine.connect()`.
-    N_LSQVER = c.N_LSQVER,
+/// QUIC version constants. Uses C values directly to stay in sync with the C library.
+pub const LsquicVersion = struct {
+    pub const V043 = c.LSQVER_043;
+    pub const V046 = c.LSQVER_046;
+    pub const V050 = c.LSQVER_050;
+    pub const V_ID27 = c.LSQVER_ID27;
+    pub const V_ID29 = c.LSQVER_ID29;
+    pub const V_I001 = c.LSQVER_I001;
+    pub const V_I002 = c.LSQVER_I002;
+    /// Special value indicating the number of versions. It may be used as argument to `engine.connect()`.
+    pub const N_LSQVER = c.N_LSQVER;
 };
 
 pub const GlobalInitFlags = struct {
@@ -62,8 +63,6 @@ test "lsquic global init and cleanup" {
     globalCleanup();
 }
 
-fn newStream() Stream {}
-
 //* Write data to the stream, but do not flush: connection cap take a hit.
 // * After stream is destroyed, connection cap should go back up.
 // */
@@ -92,11 +91,13 @@ fn newStream() Stream {}
 const std = @import("std");
 const testing = std.testing;
 
-const engine = @import("engine.zig");
+pub const engine = @import("engine.zig");
 pub const Engine = engine.Engine;
 pub const EngineFlags = engine.EngineFlags;
 pub const EngineApi = engine.EngineApi;
 pub const EngineSettings = engine.Settings;
+pub const initSettings = engine.initSettings;
+pub const checkSettings = engine.checkSettings;
 
 const connection = @import("connection.zig");
 pub const Connection = connection.Connection;

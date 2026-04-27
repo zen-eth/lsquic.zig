@@ -9,110 +9,38 @@ pub const EngineFlags = struct {
     pub const HTTP = c.LSENG_HTTP;
 };
 
+// Callback types use anyopaque to avoid cross-@cImport type mismatches
+// when consumed from a different module.
 const PacketsOutFn = ?*const fn (
     packets_out_ctx: ?*anyopaque,
-    specs: [*c]const lsquic.OutSpec,
+    specs: ?*const anyopaque,
     count: c_uint,
-) callconv(.C) c_int;
+) callconv(.c) c_int;
 
 const LookupCertFn = ?*const fn (
     cert_lu_ctx: ?*anyopaque,
-    sock_addr: ?*const c.sockaddr,
+    sock_addr: ?*const anyopaque,
     sni: [*c]const u8,
-) callconv(.C) ?*c.ssl_ctx_st;
+) callconv(.c) ?*anyopaque;
 
 const GetSslCtxFn = ?*const fn (
     peer_ctx: ?*anyopaque,
-    local_addr: ?*const c.sockaddr,
-) callconv(.C) ?*c.ssl_ctx_st;
+    local_addr: ?*const anyopaque,
+) callconv(.c) ?*anyopaque;
 
 const lsquic = @import("lsquic.zig");
 
-pub const Settings = extern struct {
-    es_versions: c_uint,
-    es_cfcw: c_uint,
-    es_sfcw: c_uint,
-    es_max_cfcw: c_uint,
-    es_max_sfcw: c_uint,
-    es_max_streams_in: c_uint,
-    es_handshake_to: c_ulong,
-    es_idle_conn_to: c_ulong,
-    es_silent_close: c_int,
-    es_max_header_list_size: c_uint,
-    es_ua: [*c]const u8,
-    es_sttl: u64,
-    es_pdmd: u32,
-    es_aead: u32,
-    es_kexs: u32,
-    es_max_inchoate: c_uint,
-    es_support_srej: c_int,
-    es_support_push: c_int,
-    es_support_tcid0: c_int,
-    es_support_nstp: c_int,
-    es_honor_prst: c_int,
-    es_send_prst: c_int,
-    es_progress_check: c_uint,
-    es_rw_once: c_int,
-    es_proc_time_thresh: c_uint,
-    es_pace_packets: c_int,
-    es_clock_granularity: c_uint,
-    es_cc_algo: c_uint,
-    es_cc_rtt_thresh: c_uint,
-    es_noprogress_timeout: c_uint,
-    es_init_max_data: c_uint,
-    es_init_max_stream_data_bidi_remote: c_uint,
-    es_init_max_stream_data_bidi_local: c_uint,
-    es_init_max_stream_data_uni: c_uint,
-    es_init_max_streams_bidi: c_uint,
-    es_init_max_streams_uni: c_uint,
-    es_idle_timeout: c_uint,
-    es_ping_period: c_uint,
-    es_scid_len: c_uint,
-    es_scid_iss_rate: c_uint,
-    es_qpack_dec_max_size: c_uint,
-    es_qpack_dec_max_blocked: c_uint,
-    es_qpack_enc_max_size: c_uint,
-    es_qpack_enc_max_blocked: c_uint,
-    es_ecn: c_int,
-    es_allow_migration: c_int,
-    es_retry_token_duration: c_uint,
-    es_ql_bits: c_int,
-    es_spin: c_int,
-    es_delayed_acks: c_int,
-    es_timestamps: c_int,
-    es_max_udp_payload_size_rx: c_ushort,
-    es_grease_quic_bit: c_int,
-    es_dplpmtud: c_int,
-    es_base_plpmtu: c_ushort,
-    es_max_plpmtu: c_ushort,
-    es_mtu_probe_timer: c_uint,
-    es_datagrams: c_int,
-    es_optimistic_nat: c_int,
-    es_ext_http_prio: c_int,
-    es_qpack_experiment: c_int,
-    es_ptpc_periodicity: c_uint,
-    es_ptpc_max_packtol: c_uint,
-    es_ptpc_dyn_target: c_int,
-    es_ptpc_target: f32,
-    es_ptpc_prop_gain: f32,
-    es_ptpc_int_gain: f32,
-    es_ptpc_err_thresh: f32,
-    es_ptpc_err_divisor: f32,
-    es_delay_onclose: c_int,
-    es_max_batch_size: c_uint,
-    es_check_tp_sanity: c_int,
-    es_amp_factor: c_int,
-    es_send_verneg: c_int,
-    es_preferred_address: [24]u8,
+/// Use C type directly to guarantee layout compatibility.
+pub const Settings = c.lsquic_engine_settings;
 
-    pub fn init(settings: *Settings, flags: c_uint) void {
-        c.lsquic_engine_init_settings(@ptrCast(settings), flags);
-    }
+pub fn initSettings(settings: *Settings, flags: c_uint) void {
+    c.lsquic_engine_init_settings(settings, flags);
+}
 
-    pub fn check(settings: *Settings, flags: c_uint, err_buf: []u8) bool {
-        return c.lsquic_engine_check_settings(@ptrCast(settings), flags, @ptrCast(err_buf), err_buf.len) != 0;
-    }
-};
+/// Returns true if settings are valid, false otherwise.
+pub fn checkSettings(settings: *Settings, flags: c_uint, err_buf: []u8) bool {
+    return c.lsquic_engine_check_settings(settings, flags, @ptrCast(err_buf), err_buf.len) == 0;
+}
 
 pub const EngineApi = struct {
     // Settings
@@ -135,7 +63,7 @@ pub const EngineApi = struct {
     ea_get_ssl_ctx: ?GetSslCtxFn,
 
     // Other optional callbacks
-    ea_hsi_if: ?*const c.lsquic_hset_if = null,
+    ea_hsi_if: ?*const anyopaque = null,
     ea_hsi_ctx: ?*anyopaque = null,
     ea_alpn: ?[*:0]const u8 = null,
 
@@ -175,15 +103,15 @@ pub const Engine = extern struct {
         //    if (api.ea_lookup_cert == null) return error.MissingLookupCert;
         //}
         var c_api: c.lsquic_engine_api = .{
-            .ea_settings = @ptrCast(api.ea_settings),
-            .ea_packets_out = api.ea_packets_out,
+            .ea_settings = api.ea_settings,
+            .ea_packets_out = @ptrCast(api.ea_packets_out),
             .ea_packets_out_ctx = api.ea_packets_out_ctx,
-            .ea_stream_if = @ptrCast(&api.ea_stream_if),
+            .ea_stream_if = @ptrCast(api.ea_stream_if),
             .ea_stream_if_ctx = api.ea_stream_if_ctx,
-            .ea_lookup_cert = if (api.ea_lookup_cert) |luc| luc else null,
+            .ea_lookup_cert = if (api.ea_lookup_cert) |luc| @ptrCast(luc) else null,
             .ea_cert_lu_ctx = api.ea_cert_lu_ctx,
-            .ea_get_ssl_ctx = if (api.ea_get_ssl_ctx) |gsc| gsc else null,
-            .ea_hsi_if = api.ea_hsi_if,
+            .ea_get_ssl_ctx = if (api.ea_get_ssl_ctx) |gsc| @ptrCast(gsc) else null,
+            .ea_hsi_if = @ptrCast(@alignCast(api.ea_hsi_if)),
             .ea_hsi_ctx = api.ea_hsi_ctx,
             .ea_alpn = api.ea_alpn,
         };
@@ -215,7 +143,7 @@ pub const Engine = extern struct {
 
     pub fn connect(
         self: *Engine,
-        version: lsquic.LsquicVersion,
+        version: c_int,
         local_sa: ?*const SockAddr,
         peer_sa: ?*const SockAddr,
         peer_ctx: ?*anyopaque,
@@ -229,7 +157,7 @@ pub const Engine = extern struct {
     ) ?*Connection {
         const conn = c.lsquic_engine_connect(
             @ptrCast(@alignCast(self)),
-            @intFromEnum(version),
+            @intCast(version),
             @ptrCast(@alignCast(local_sa)),
             @ptrCast(@alignCast(peer_sa)),
             @ptrCast(@alignCast(peer_ctx)),
@@ -283,10 +211,16 @@ pub const Engine = extern struct {
 };
 
 test "Engine creation fails with invalid settings" {
-    const packetsOut: PacketsOutFn = undefined;
     const stream_if: StreamIf = .{};
-    const api = EngineApi.init(packetsOut, stream_if, null, null);
-    try std.testing.expectError(EngineError.InvalidSettings, Engine.new(EngineFlags.SERVER, &api));
+    const api = EngineApi{
+        .ea_settings = null,
+        .ea_stream_if = &stream_if,
+        .ea_stream_if_ctx = null,
+        .ea_packets_out = null,
+        .ea_packets_out_ctx = null,
+        .ea_get_ssl_ctx = null,
+    };
+    try std.testing.expectError(EngineError.CreationFailed, Engine.new(EngineFlags.SERVER, &api));
 }
 
 const std = @import("std");
@@ -294,8 +228,6 @@ const testing = std.testing;
 const StreamIf = @import("stream.zig").StreamIf;
 const Connection = @import("connection.zig").Connection;
 const SockAddr = @import("lsquic.zig").SockAddr;
-
-pub const Settings2 = c.lsquic_engine_settings;
 
 const c = @cImport({
     @cInclude("lsquic.h");
